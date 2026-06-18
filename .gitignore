@@ -1,0 +1,6 @@
+/bridge
+/dist/
+*.test
+*.out
+.idea/
+.vscode/
