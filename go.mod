@@ -1,6 +1,6 @@
 module github.com/frac-labs/harness-bridge
 
-go 1.22
+go 1.23
 
 require (
 	github.com/frac-labs/harness-protos v0.1.1
