@@ -13,8 +13,14 @@ import (
 // and maps it to a known harness identity. Used for audit attribution.
 //
 // Accepted SPIFFE URIs (canonical, matching kit/platform/harness-ca/* Certificates):
-//   - spiffe://frac-labs/harness/frac
-//   - spiffe://frac-labs/harness/fractury
+//   - spiffe://frac-labs/harness/frac          → "frac"
+//   - spiffe://frac-labs/harness/fractury      → "fractury"
+//   - spiffe://frac-labs/service/<name>        → "service/<name>"
+//
+// Services (e.g. webhook-router) are non-harness callers but still need audit
+// attribution; the returned id is used verbatim as audit.HarnessID, so the
+// "service/" prefix is preserved to keep it distinguishable from harnesses
+// with potentially-colliding names.
 func HarnessIDFromContext(ctx context.Context) (string, error) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
@@ -35,6 +41,18 @@ func HarnessIDFromContext(ctx context.Context) (string, error) {
 			return "fractury", nil
 		case strings.HasPrefix(s, "spiffe://frac-labs/harness/frac"):
 			return "frac", nil
+		case strings.HasPrefix(s, "spiffe://frac-labs/service/"):
+			name := strings.TrimPrefix(s, "spiffe://frac-labs/service/")
+			// Drop anything after the service name (path segments / query)
+			// so the audit id stays stable across cert reissues that may
+			// append a trailing path component.
+			if i := strings.IndexAny(name, "/?"); i >= 0 {
+				name = name[:i]
+			}
+			if name == "" {
+				return "", errors.New("service SPIFFE id missing name segment")
+			}
+			return "service/" + name, nil
 		}
 	}
 	return "", errors.New("peer cert has no recognized SPIFFE id")
