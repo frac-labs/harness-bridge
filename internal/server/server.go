@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/frac-labs/harness-bridge/internal/github"
+	harnessv1 "github.com/frac-labs/harness-protos/gen/go/frac_labs/harness/v1"
 	"google.golang.org/grpc"
 )
 
@@ -17,10 +18,16 @@ type Config struct {
 }
 
 // Server is the gRPC service container.
+//
+// Embeds the v1 Unimplemented*Server types so that future RPCs added to the
+// harness-protos surface compile cleanly without an immediate code change here.
 type Server struct {
-	cfg    Config
-	gh     *github.Client
-	audit  *AuditSink
+	harnessv1.UnimplementedSecretsServer
+	harnessv1.UnimplementedBridgeServer
+
+	cfg   Config
+	gh    *github.Client
+	audit *AuditSink
 }
 
 // New constructs the server.
@@ -36,14 +43,11 @@ func New(cfg Config) (*Server, error) {
 	}, nil
 }
 
-// Register attaches all sub-services to the gRPC server.
-// v0.1.0: services are registered as stubs at the protos-defined service names.
-// Real wire-level integration arrives once harness-protos goes GA-stable on the
-// service descriptors used here (tracked in B3/B4).
+// Register attaches Secrets + Bridge services to the gRPC server at the
+// harness-protos v1 service names. MintGitHubToken is the only RPC with a real
+// implementation in this milestone (B2); GetSecret / EnqueueTicket / EmitEvent
+// return codes.Unimplemented and are wired up by B3 / B4.
 func (s *Server) Register(gs *grpc.Server) {
-	// NOTE: harness-protos service registration is intentionally deferred for
-	// v0.1.0. The image is publishable + chart-deployable; concrete service
-	// wiring lands in B3 (Frac bridge-client integration) where the protos
-	// surface stabilizes.
-	_ = gs
+	harnessv1.RegisterSecretsServer(gs, s)
+	harnessv1.RegisterBridgeServer(gs, s)
 }
