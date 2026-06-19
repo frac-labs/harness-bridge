@@ -12,9 +12,9 @@ import (
 // HarnessIDFromContext extracts the SPIFFE-id / SAN-URI from the peer cert
 // and maps it to a known harness identity. Used for audit attribution.
 //
-// Accepted SPIFFE URIs (v0.1.0):
-//   - spiffe://harness.fractura/frac
-//   - spiffe://harness.fractura/fractury
+// Accepted SPIFFE URIs (canonical, matching kit/platform/harness-ca/* Certificates):
+//   - spiffe://frac-labs/harness/frac
+//   - spiffe://frac-labs/harness/fractury
 func HarnessIDFromContext(ctx context.Context) (string, error) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
@@ -31,10 +31,10 @@ func HarnessIDFromContext(ctx context.Context) (string, error) {
 	for _, uri := range certs[0].URIs {
 		s := uri.String()
 		switch {
-		case strings.HasPrefix(s, "spiffe://harness.fractura/frac"):
-			return "frac", nil
-		case strings.HasPrefix(s, "spiffe://harness.fractura/fractury"):
+		case strings.HasPrefix(s, "spiffe://frac-labs/harness/fractury"):
 			return "fractury", nil
+		case strings.HasPrefix(s, "spiffe://frac-labs/harness/frac"):
+			return "frac", nil
 		}
 	}
 	return "", errors.New("peer cert has no recognized SPIFFE id")
