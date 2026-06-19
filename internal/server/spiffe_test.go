@@ -2,19 +2,14 @@ package server
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"net/url"
 	"testing"
 
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )
-
-// fakeTLSInfo satisfies credentials.AuthInfo (via AuthType) AND the anonymous
-// interface HarnessIDFromContext type-asserts on (GetCertificates).
-type fakeTLSInfo struct{ certs []*x509.Certificate }
-
-func (f fakeTLSInfo) AuthType() string                    { return "tls" }
-func (f fakeTLSInfo) GetCertificates() []*x509.Certificate { return f.certs }
 
 func ctxWithSPIFFE(t *testing.T, spiffe string) context.Context {
 	t.Helper()
@@ -24,7 +19,9 @@ func ctxWithSPIFFE(t *testing.T, spiffe string) context.Context {
 	}
 	cert := &x509.Certificate{URIs: []*url.URL{u}}
 	return peer.NewContext(context.Background(), &peer.Peer{
-		AuthInfo: fakeTLSInfo{certs: []*x509.Certificate{cert}},
+		AuthInfo: credentials.TLSInfo{
+			State: tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}},
+		},
 	})
 }
 
@@ -54,4 +51,38 @@ func TestHarnessIDFromContext(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRealTLSInfoSatisfiesAssertion guards against regressing to an anonymous
+// interface assertion that real credentials.TLSInfo does not satisfy. The bug
+// at v0.2.0 was an assertion to interface{ GetCertificates() []*x509.Certificate },
+// which the test fake satisfied but the production type did not — yielding
+// "peer auth info not TLS" on every real mTLS call.
+func TestRealTLSInfoSatisfiesAssertion(t *testing.T) {
+	cert := &x509.Certificate{URIs: mustParseURIs(t, "spiffe://frac-labs/harness/fractury")}
+	ctx := peer.NewContext(context.Background(), &peer.Peer{
+		AuthInfo: credentials.TLSInfo{
+			State: tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}},
+		},
+	})
+	id, err := HarnessIDFromContext(ctx)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if id != "fractury" {
+		t.Fatalf("id=%q want=fractury", id)
+	}
+}
+
+func mustParseURIs(t *testing.T, ss ...string) []*url.URL {
+	t.Helper()
+	out := make([]*url.URL, 0, len(ss))
+	for _, s := range ss {
+		u, err := url.Parse(s)
+		if err != nil {
+			t.Fatalf("parse %q: %v", s, err)
+		}
+		out = append(out, u)
+	}
+	return out
 }

@@ -2,10 +2,10 @@ package server
 
 import (
 	"context"
-	"crypto/x509"
 	"errors"
 	"strings"
 
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
 )
 
@@ -26,11 +26,11 @@ func HarnessIDFromContext(ctx context.Context) (string, error) {
 	if !ok {
 		return "", errors.New("no peer in context")
 	}
-	tlsInfo, ok := p.AuthInfo.(interface{ GetCertificates() []*x509.Certificate })
+	tlsInfo, ok := p.AuthInfo.(credentials.TLSInfo)
 	if !ok {
 		return "", errors.New("peer auth info not TLS")
 	}
-	certs := tlsInfo.GetCertificates()
+	certs := tlsInfo.State.PeerCertificates
 	if len(certs) == 0 {
 		return "", errors.New("no client cert presented")
 	}
